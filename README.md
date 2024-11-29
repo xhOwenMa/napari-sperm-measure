@@ -36,7 +36,9 @@ See `requirements.txt` for a complete list of dependencies. Main requirements in
 - napari
 - numpy
 - opencv-python
-- qtpy
+- pyqt
+  
+## Installation
 
 We highly recommend using a virtual environment to manage dependencies. We suggest using `conda`:
 ```terminal
@@ -46,14 +48,16 @@ Activate the environment:
 ```terminal
 conda activate napari-sperm-measure
 ```
-Install the required packages:
+Clone this repository and navigate to the root directory:
+```terminal
+git clone https://github.com/xhOwenMa/napari-sperm-measure.git
+cd napari-sperm-measure
+```
+Install the dependencies:
 ```terminal
 pip install -r requirements.txt
 ```
-
-## Installation
-
-You can then install this plugin via pip, navigate to the root directory of this repository and run:
+You can then install this package via pip, run:
 ```terminal
 pip install napari-sperm-measure
 ```
