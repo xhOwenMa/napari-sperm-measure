@@ -1,0 +1,6 @@
+numpy
+napari>=0.4.14
+magicgui>=0.3.0
+opencv-python
+scikit-image
+scipy

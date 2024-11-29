@@ -1,0 +1,2 @@
+[napari.plugin]
+napari-sperm-measure = napari_sperm_measure
