@@ -59,8 +59,17 @@ pip install -r requirements.txt
 ```
 You can then install this package via pip, run:
 ```terminal
-pip install napari-sperm-measure
+python -m pip install .
 ```
+If you want to install the package in editable mode, run:
+```terminal
+python -m pip install -e .
+```
+*Note:* if you encounter errors with `qtpy`, you may need to install it manually through `conda`, run:
+```terminal
+conda install pyqt qtpy
+```
+This applies to other dependencies as well.
 
 ## Usage
 

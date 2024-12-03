@@ -4,12 +4,31 @@ import pandas as pd
 from typing import Dict, List
 import numpy as np
 from PIL import Image
+import sys
 
 class DataManager:
-    def __init__(self):
-        # Get the root directory of the package
-        self.root_dir = Path(__file__).parent.parent.parent
-        self.test_data_dir = self.root_dir / 'test_data' / 'sperm'
+    def __init__(self, data_dir: Path = None):
+        # Try different possible locations for the test data
+        possible_paths = [
+            data_dir if data_dir is not None else None,  # User provided path
+            Path(__file__).parent.parent.parent / 'test_data' / 'sperm',  # Development path
+            Path.cwd() / 'test_data' / 'sperm',  # Current working directory
+        ]
+
+        # Find first valid path
+        self.test_data_dir = None
+        for path in possible_paths:
+            if path is not None and path.exists():
+                self.test_data_dir = path
+                break
+
+        if self.test_data_dir is None:
+            raise FileNotFoundError(
+                "Could not find test_data directory. Please provide the correct path or ensure "
+                "the test_data directory exists in one of the following locations:\n" +
+                "\n".join(str(p) for p in possible_paths if p is not None)
+            )
+
         # Fix the path handling for the Excel file
         self.ground_truth_file = str(self.test_data_dir / 'manual.xlsx')
 
@@ -26,8 +45,21 @@ class DataManager:
         Load ground truth data from Excel file
         """
         try:
-            # Load Excel file directly without adding extension
-            df = pd.read_excel(self.ground_truth_file)
+            # Try to import openpyxl explicitly to give better error message
+            try:
+                import openpyxl
+            except ImportError:
+                print("Error: openpyxl is not installed in the current Python environment")
+                print(f"Current Python interpreter: {sys.executable}")
+                print("\nTo fix this, try the following steps:")
+                print("1. Open a terminal")
+                print(f"2. Run: {sys.executable} -m pip install openpyxl")
+                print("\nIf that doesn't work, you might be using a virtual environment.")
+                print("Make sure to activate the correct environment before installing.")
+                return {'hard': {}, 'medium': {}, 'easy': {}}
+
+            # Load Excel file
+            df = pd.read_excel(self.ground_truth_file, engine='openpyxl')
             
             # Initialize result dictionary
             result = {
