@@ -75,30 +75,83 @@ def trace_cell(image, point):
     # Return the cell mask
     return cell_mask
 
-def measure_cell(cell_mask):
-    """Measures the cell length using morphological operations (3.06 pixels/micrometer)"""
-    def morphological_thinning(image):
-        """Apply enhanced morphological thinning to the binary image."""
-        size = np.size(image)
-        skel = np.zeros(image.shape, np.uint8)
-        
-        element = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
-        done = False
-        
-        while not done:
-            eroded = cv2.erode(image, element)
-            temp = cv2.dilate(eroded, element)
-            temp = cv2.subtract(image, temp)
-            skel = cv2.bitwise_or(skel, temp)
-            image = eroded.copy()
-            
-            zeros = size - cv2.countNonZero(image)
-            if zeros == size:
-                done = True
-        
-        return skel
+def morphological_thinning(image):
+    """
+    Apply Zhang-Suen thinning algorithm to binary image.
+    Args:
+        image: Binary image as numpy array with values 0 and 255
+    Returns:
+        Thinned binary image
+    """
+    # Convert to binary image with 0 and 1
+    image = image.copy() // 255
+    
+    def neighbors(x, y, image):
+        """Return 8-neighbors of point p1(x,y) in clockwise order"""
+        x_1, y_1, x1, y1 = x-1, y-1, x+1, y+1
+        return [image[x_1][y], image[x_1][y1], image[x][y1], image[x1][y1],     # P2,P3,P4,P5
+                image[x1][y], image[x1][y_1], image[x][y_1], image[x_1][y_1]]   # P6,P7,P8,P9
 
-    eroded = morphological_thinning(cell_mask)
-    # 2, calculate the area of the cell in micrometers
-    area = np.sum(eroded / 255) / 3.06
-    return eroded, area
+    def transitions(neighbors):
+        """Return number of 0,1 transitions in ordered sequence of neighbors"""
+        n = neighbors + neighbors[0:1]    # P2, P3, ... P9, P2
+        return sum((n1, n2) == (0, 1) for n1, n2 in zip(n, n[1:]))
+
+    def first_subiteration(image):
+        """Delete pixels satisfying all conditions in first subiteration"""
+        rows, cols = image.shape
+        deletion_candidates = []
+        
+        for x in range(1, rows - 1):
+            for y in range(1, cols - 1):
+                if image[x][y] != 1:
+                    continue
+                    
+                P = neighbors(x, y, image)
+                if (2 <= sum(P) <= 6 and           # Condition 1
+                    transitions(P) == 1 and        # Condition 2
+                    P[0] * P[2] * P[4] == 0 and   # Condition 3
+                    P[2] * P[4] * P[6] == 0):     # Condition 4
+                    deletion_candidates.append((x, y))
+        
+        for x, y in deletion_candidates:
+            image[x][y] = 0
+        return image
+
+    def second_subiteration(image):
+        """Delete pixels satisfying all conditions in second subiteration"""
+        rows, cols = image.shape
+        deletion_candidates = []
+        
+        for x in range(1, rows - 1):
+            for y in range(1, cols - 1):
+                if image[x][y] != 1:
+                    continue
+                    
+                P = neighbors(x, y, image)
+                if (2 <= sum(P) <= 6 and           # Condition 1
+                    transitions(P) == 1 and        # Condition 2
+                    P[0] * P[2] * P[6] == 0 and   # Condition 3
+                    P[0] * P[4] * P[6] == 0):     # Condition 4
+                    deletion_candidates.append((x, y))
+        
+        for x, y in deletion_candidates:
+            image[x][y] = 0
+        return image
+
+    prev = np.zeros(image.shape, dtype=np.uint8)
+    while True:
+        image = first_subiteration(image)
+        image = second_subiteration(image)
+        if np.array_equal(image, prev):
+            break
+        prev = image.copy()
+    
+    # Convert back to 0-255 binary image
+    return image * 255
+
+def measure_cell(cell_mask):
+    """Measures the cell length (3.06 pixels/micrometer)"""
+    skeleton = morphological_thinning(cell_mask)
+    length = np.count_nonzero(skeleton) / 3.06
+    return skeleton, length
