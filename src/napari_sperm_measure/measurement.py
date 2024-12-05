@@ -8,7 +8,7 @@ import cv2
 
 
 def initial_preprocessing(image, iterations=5, kernel_size=11, block_size=51, c_value=-3):
-    """Enhanced preprocessing with adaptive methods and configurable parameters"""
+    """preprocessing with configurable parameters"""
     # Convert to grayscale if needed
     if len(image.shape) > 2:
         image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
@@ -27,20 +27,27 @@ def initial_preprocessing(image, iterations=5, kernel_size=11, block_size=51, c_
         255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
         cv2.THRESH_BINARY,
-        blockSize=block_size,  # configurable
-        C=c_value  # configurable
+        blockSize=block_size,
+        C=c_value
     )
     
     # close the gaps on the cell edges
-    adaptive_thresh_copy = adaptive_thresh.copy()
+    result = adaptive_thresh.copy()
     kernel = np.ones((kernel_size, kernel_size), np.uint8)
-    for _ in range(iterations):
-        closing = cv2.morphologyEx(adaptive_thresh_copy, cv2.MORPH_CLOSE, kernel)
-        adaptive_thresh_copy = closing
     
-    # Ensure all stages are uint8 and non-empty
+    for i in range(iterations):
+        # Alternate between closing and dilation
+        if i % 2 == 0:
+            result = cv2.morphologyEx(result, cv2.MORPH_CLOSE, kernel)
+        else:
+            result = cv2.dilate(result, kernel, iterations=1)
+    
+    # Final closing to clean up
+    final_kernel = np.ones((kernel_size, kernel_size), np.uint8)
+    result = cv2.morphologyEx(result, cv2.MORPH_CLOSE, final_kernel)
+    
     stages = {
-        'Preprocessed Image': closing.astype(np.uint8)
+        'Preprocessed Image': result.astype(np.uint8)
     }
 
     return stages

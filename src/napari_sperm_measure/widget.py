@@ -273,10 +273,14 @@ class SpermMeasureWidget(QWidget):
         process_layout.addLayout(params_grid)
         
         # Connect slider signals
-        self.block_size_slider.valueChanged.connect(self._on_param_changed)
-        self.c_value_slider.valueChanged.connect(self._on_param_changed)
-        self.kernel_slider.valueChanged.connect(self._on_param_changed)
-        self.iter_slider.valueChanged.connect(self._on_param_changed)
+        self.block_size_slider.valueChanged.connect(
+            lambda v: self._update_preprocessing_for_slider('block_size', v))
+        self.c_value_slider.valueChanged.connect(
+            lambda v: self._update_preprocessing_for_slider('c_value', v))
+        self.kernel_slider.valueChanged.connect(
+            lambda v: self._update_preprocessing_for_slider('kernel_size', v))
+        self.iter_slider.valueChanged.connect(
+            lambda v: self._update_preprocessing_for_slider('iterations', v))
         
         # Update slider labels
         self.block_size_slider.valueChanged.connect(
@@ -414,39 +418,44 @@ class SpermMeasureWidget(QWidget):
         self.kernel_label.setVisible(visible)
         self.iter_label.setVisible(visible)
 
-    def _on_param_changed(self):
-        """Handle parameter slider changes"""
-        if self.is_preprocessing and self.viewer.layers:
-            self._update_preprocessing()
-
-    def _update_preprocessing(self):
-        """Update preprocessing with current parameters"""
-        if not self.viewer.layers:
+    def _update_preprocessing_for_slider(self, param_name, value):
+        """Update preprocessing for a specific parameter change"""
+        if not self.is_preprocessing or not self.viewer.layers:
             return
+
+        # Get current values from all sliders
+        params = {
+            'block_size': self.block_size_slider.value(),
+            'c_value': self.c_value_slider.value(),
+            'kernel_size': self.kernel_slider.value(),
+            'iterations': self.iter_slider.value()
+        }
+
+        # Ensure block_size and kernel_size are odd
+        if param_name in ['block_size', 'kernel_size']:
+            if value % 2 == 0:
+                value += 1
+                if param_name == 'block_size':
+                    self.block_size_slider.setValue(value)
+                else:
+                    self.kernel_slider.setValue(value)
+
+        # Update the specific parameter
+        params[param_name] = value
 
         # Get the original image
         image_layer = self.viewer.layers[0]
         image_data = image_layer.data
-        
-        # Get current parameter values (ensure block_size is odd)
-        block_size = self.block_size_slider.value()
-        if block_size % 2 == 0:
-            block_size += 1
-        c_value = self.c_value_slider.value()
-        kernel_size = self.kernel_slider.value()
-        if kernel_size % 2 == 0:
-            kernel_size += 1
-        iterations = self.iter_slider.value()
 
-        # Update preprocessing with new parameters
+        # Update preprocessing with current parameters
         self.stages = initial_preprocessing(
-            image_data, 
-            iterations=iterations,
-            kernel_size=kernel_size,
-            block_size=block_size,
-            c_value=c_value
+            image_data,
+            iterations=params['iterations'],
+            kernel_size=params['kernel_size'],
+            block_size=params['block_size'],
+            c_value=params['c_value']
         )
-        
+
         # Update the viewer layers
         for stage_name, stage_image in self.stages.items():
             if stage_name in self.viewer.layers:
@@ -471,7 +480,6 @@ class SpermMeasureWidget(QWidget):
             self.is_preprocessing = True
             self._set_params_visibility(True)
             self.preprocess_btn.setText("Apply Preprocessing")
-            self._update_preprocessing()
         else:
             self._update_status("Preprocessing complete")
             # End preprocessing mode
