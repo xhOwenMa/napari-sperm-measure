@@ -10,6 +10,9 @@ from qtpy.QtGui import QKeySequence
 import napari
 import cv2
 import numpy as np
+import os
+import json
+import datetime
 from .data_handling import DataManager
 from .measurement import initial_preprocessing, trace_cell, measure_cell
 
@@ -383,10 +386,11 @@ class SpermMeasureWidget(QWidget):
         """)
         process_layout.addWidget(self.measure_btn)
 
-        # Save button
-        self.save_btn = QPushButton("Save Current Layer")
-        self.save_btn.clicked.connect(self._on_save_click)
-        self.save_btn.setStyleSheet("""
+        # Export Data button
+        self.export_btn = QPushButton("Export Data")
+        self.export_btn.clicked.connect(self._on_export_click)
+        self.export_btn.setEnabled(False)  # Initially disabled until measurement is done
+        self.export_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
                 color: white;
@@ -397,7 +401,7 @@ class SpermMeasureWidget(QWidget):
                 background-color: #388E3C;
             }
         """)
-        process_layout.addWidget(self.save_btn)
+        process_layout.addWidget(self.export_btn)
         
         # Result label
         self.result_label = QLabel()
@@ -487,31 +491,73 @@ class SpermMeasureWidget(QWidget):
             self._set_params_visibility(False)
             self.preprocess_btn.setText("Preprocess Image")
 
-    def _on_save_click(self):
-        """Handle save button click"""
-        if not self.viewer.layers:
+    def _on_export_click(self):
+        """Export skeleton image and measurement data"""
+        if 'Cell Skeleton' not in self.viewer.layers or not self.result_label.text():
+            self._update_status("Please measure the cell length first")
             return
             
-        # Get the active layer
-        active_layer = self.viewer.layers.selection.active
-        if active_layer is None:
-            return
+        try:
+            # Create base export directory if it doesn't exist
+            export_dir = "measurement_exports"
+            os.makedirs(export_dir, exist_ok=True)
             
-        # Open file dialog
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Image",
-            "",
-            "PNG Files (*.png);;All Files (*)"
-        )
-        
-        if file_path:
-            # Ensure file has .png extension
-            if not file_path.lower().endswith('.png'):
-                file_path += '.png'
+            # Create skeleton images directory
+            skeleton_dir = os.path.join(export_dir, "skeleton_images")
+            os.makedirs(skeleton_dir, exist_ok=True)
             
-            # Save the image
-            cv2.imwrite(file_path, active_layer.data)
+            # Get current image information
+            difficulty = self.diff_combo.currentText().lower()
+            current_index = self.image_spin.value()
+            current_image_id = self.data_manager.get_current_image_id(difficulty, current_index)
+            
+            if not current_image_id:
+                self._update_status("Error: Could not determine current image ID")
+                return
+                
+            measured_length = float(self.result_label.text().split(":")[1].strip().replace("mm", ""))
+            
+            # Save skeleton image
+            skeleton_image = self.viewer.layers['Cell Skeleton'].data
+            image_filename = f"{current_image_id}_skeleton.png"
+            image_path = os.path.join(skeleton_dir, image_filename)
+            cv2.imwrite(image_path, skeleton_image)
+            
+            # Prepare measurement data
+            measurement_data = {
+                'imageId': current_image_id,
+                'difficulty': difficulty,
+                'measured_length': measured_length,
+                'timestamp': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            
+            # Load or create measurements file
+            measurements_file = os.path.join(export_dir, "measurements.json")
+            if os.path.exists(measurements_file):
+                with open(measurements_file, 'r') as f:
+                    measurements = json.load(f)
+                
+                # Check if measurement for this image exists
+                updated = False
+                for i, entry in enumerate(measurements):
+                    if entry['imageId'] == current_image_id:
+                        measurements[i] = measurement_data
+                        updated = True
+                        break
+                        
+                if not updated:
+                    measurements.append(measurement_data)
+            else:
+                measurements = [measurement_data]
+                
+            # Save measurements file
+            with open(measurements_file, 'w') as f:
+                json.dump(measurements, f, indent=4)
+                
+            self._update_status(f"Exported data for {current_image_id}")
+            
+        except Exception as e:
+            self._update_status(f"Error exporting data: {str(e)}")
 
     def _load_current_image(self):
         """Load the currently selected image"""
@@ -754,6 +800,9 @@ class SpermMeasureWidget(QWidget):
                 # Update the result label
                 self.result_label.setText(f"Measured Cell Length: {length:.2f}mm")
                 self._update_status(f"Measurement complete: {length:.2f}mm")
+                
+                # Enable export button
+                self.export_btn.setEnabled(True)
 
         timer = QTimer(self)
         timer.timeout.connect(update_progress)
@@ -764,7 +813,7 @@ class SpermMeasureWidget(QWidget):
         self.preprocess_btn.setToolTip("Enhance the image for better cell detection (Shortcut: P)")
         self.trace_btn.setToolTip("Click points along the cell to trace its body (Shortcut: T)")
         self.measure_btn.setToolTip("Calculate the length of the traced cell (Shortcut: M)")
-        self.save_btn.setToolTip("Save the current layer as an image (Shortcut: S)")
+        self.export_btn.setToolTip("Export skeleton image and measurement data (Shortcut: S)")
         self.block_size_slider.setToolTip("Adjust the size of the local area for thresholding")
         self.c_value_slider.setToolTip("Fine-tune the threshold sensitivity")
         self.kernel_slider.setToolTip("Adjust the size of morphological operations")
@@ -803,7 +852,7 @@ class SpermMeasureWidget(QWidget):
         QShortcut(QKeySequence('P'), self, self._on_preprocess_click)
         QShortcut(QKeySequence('T'), self, self._on_trace_click)
         QShortcut(QKeySequence('M'), self, self._on_measure_click)
-        QShortcut(QKeySequence('S'), self, self._on_save_click)
+        QShortcut(QKeySequence('S'), self, self._on_export_click)
         QShortcut(QKeySequence('H'), self, self._show_help)
         QShortcut(QKeySequence('Esc'), self, self._disable_point_selection)
 

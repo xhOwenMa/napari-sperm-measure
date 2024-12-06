@@ -34,17 +34,8 @@ def initial_preprocessing(image, iterations=5, kernel_size=11, block_size=51, c_
     # close the gaps on the cell edges
     result = adaptive_thresh.copy()
     kernel = np.ones((kernel_size, kernel_size), np.uint8)
-    
-    for i in range(iterations):
-        # Alternate between closing and dilation
-        if i % 2 == 0:
-            result = cv2.morphologyEx(result, cv2.MORPH_CLOSE, kernel)
-        else:
-            result = cv2.dilate(result, kernel, iterations=1)
-    
-    # Final closing to clean up
-    final_kernel = np.ones((kernel_size, kernel_size), np.uint8)
-    result = cv2.morphologyEx(result, cv2.MORPH_CLOSE, final_kernel)
+    result = cv2.dilate(result, kernel, iterations=iterations)
+    result = cv2.erode(result, kernel, iterations=iterations)      
     
     stages = {
         'Preprocessed Image': result.astype(np.uint8)

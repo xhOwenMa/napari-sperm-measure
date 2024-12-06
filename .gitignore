@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+measurement_exports/
 
 # C extensions
 *.so

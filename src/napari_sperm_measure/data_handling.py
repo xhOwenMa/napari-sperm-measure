@@ -137,7 +137,33 @@ class DataManager:
                     ground_truth_length = self.ground_truth_by_difficulty[difficulty][base_id]
         
         return image_array, image_name, ground_truth_length
+    
+    def get_current_image_id(self, difficulty: str, image_index: int) -> str:
+        """Get the image ID for the current image without extension"""
+        difficulty = difficulty.lower()
+        
+        # Select the appropriate directory
+        if difficulty == 'easy':
+            dir_path = self.easy_dir
+        elif difficulty == 'medium':
+            dir_path = self.medium_dir
+        elif difficulty == 'hard':
+            dir_path = self.hard_dir
+        else:
+            raise ValueError("Difficulty must be 'easy', 'medium', or 'hard'")
 
+        # Get list of jpg files
+        image_files = sorted([f for f in os.listdir(dir_path) if f.endswith('.jpg')])
+        
+        if not image_files or image_index >= len(image_files):
+            return None
+            
+        # Get image name without extension
+        image_name = image_files[image_index]
+        image_id = image_name.split('.jpg')[0]
+    
+        return image_id
+    
     def get_image_count(self, difficulty: str) -> int:
         """Get the number of images in a difficulty folder"""
         difficulty = difficulty.lower()
